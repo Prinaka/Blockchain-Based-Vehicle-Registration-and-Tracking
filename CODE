@@ -1,0 +1,115 @@
+!pip install web3 py-solc-x
+!npm install -g ganache
+!ganache
+
+from solcx import compile_standard, install_solc
+import json
+from web3 import Web3
+
+# Install the Solidity compiler version 0.8.0
+install_solc('0.8.0')
+
+# Solidity Smart Contract
+contract_source_code = '''
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract VehicleRegistration {
+
+    // Define a structure to represent a vehicle
+    struct Vehicle {
+        string vin;  // Vehicle Identification Number
+        string owner;  // Owner of the vehicle
+        string model;  // Model of the vehicle
+        uint256 year;  // Year of manufacture
+    }
+
+    // A mapping to store vehicles using their VIN as the key
+    mapping(string => Vehicle) public vehicles;
+
+    // Event that logs when a vehicle is registered
+    event VehicleRegistered(string vin, string owner, string model, uint256 year);
+
+    // Function to register a vehicle
+    function registerVehicle(string memory _vin, string memory _owner, string memory _model, uint256 _year) public {
+        // Ensure that the vehicle with the VIN doesn't already exist
+        require(bytes(vehicles[_vin].vin).length == 0, "Vehicle with this VIN already registered.");
+
+        // Create a new vehicle and store it in the mapping
+        vehicles[_vin] = Vehicle({
+            vin: _vin,
+            owner: _owner,
+            model: _model,
+            year: _year
+        });
+
+        // Emit the registration event
+        emit VehicleRegistered(_vin, _owner, _model, _year);
+    }
+
+    // Function to retrieve a vehicle's details using the VIN
+    function getVehicle(string memory _vin) public view returns (string memory vin, string memory owner, string memory model, uint256 year) {
+        // Fetch the vehicle from the mapping
+        Vehicle memory v = vehicles[_vin];
+
+        // Ensure the vehicle exists
+        require(bytes(v.vin).length != 0, "Vehicle not found.");
+
+        // Return the vehicle details
+        return (v.vin, v.owner, v.model, v.year);
+    }
+}
+'''
+
+# Compile the contract
+compiled_sol = compile_standard({
+    "language": "Solidity",
+    "sources": {
+        "VehicleRegistration.sol": {
+            "content": contract_source_code
+        }
+    },
+    "settings": {
+        "outputSelection": {
+            "*": {
+                "*": ["abi", "metadata", "evm.bytecode", "evm.sourceMap"]
+            }
+        }
+    }
+}, solc_version="0.8.0")
+
+# Save ABI and Bytecode
+abi = compiled_sol['contracts']['VehicleRegistration.sol']['VehicleRegistration']['abi']
+bytecode = compiled_sol['contracts']['VehicleRegistration.sol']['VehicleRegistration']['evm']['bytecode']['object']
+
+
+# Connect to Ganache
+w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:8545"))
+
+# Set the default account (use one of Ganache's accounts)
+w3.eth.default_account = w3.eth.accounts[0]
+
+# Deploy the contract
+VehicleRegistration = w3.eth.contract(abi=abi, bytecode=bytecode)
+tx_hash = VehicleRegistration.constructor().transact()
+tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+
+# Get the contract address
+contract_address = tx_receipt.contractAddress
+print(f'Contract deployed at address: {contract_address}')
+
+
+# Interact with the deployed contract
+vehicle_contract = w3.eth.contract(address=contract_address, abi=abi)
+
+# Register a vehicle
+tx_hash = vehicle_contract.functions.registerVehicle(
+    "VIN67890", "Helen", "Tesla Model 3", 2021
+).transact()
+
+# Wait for the transaction to be mined
+w3.eth.wait_for_transaction_receipt(tx_hash)
+
+# Retrieve vehicle details using VIN
+vin_details = vehicle_contract.functions.getVehicle("VIN67890").call()
+print(f'VIN Details: {vin_details}')
