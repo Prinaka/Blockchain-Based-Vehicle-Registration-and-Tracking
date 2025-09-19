@@ -1,5 +1,7 @@
 from solcx import compile_standard, install_solc
 from web3 import Web3
+import json
+import os
 
 install_solc("0.8.0")
 
@@ -18,7 +20,9 @@ compiled_sol = compile_standard(
 
 abi = compiled_sol["contracts"]["VehicleRegistration.sol"]["VehicleRegistration"]["abi"]
 bytecode = compiled_sol["contracts"]["VehicleRegistration.sol"]["VehicleRegistration"]["evm"]["bytecode"]["object"]
-
+with open("VehicleRegistration_abi.json", "w") as f:
+    json.dump(abi, f)
+    
 #------------------Connect to Ganache and Deploy-----------------------
 w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:7545"))
 account = w3.eth.accounts[0]
